@@ -1,4 +1,4 @@
-"""Etapa 5: eliminación de silencios → tramos con voz de cada clip (en highlights.json)."""
+"""Etapa: eliminación de silencios → tramos con voz de cada clip (en highlights.json)."""
 
 from __future__ import annotations
 

@@ -8,6 +8,8 @@ ingest → audio → transcribe → select → reframe → captions → render �
 
 Cada etapa guarda su resultado en `data/<job_id>/`. Si algo falla, `resume` continúa sin repetir lo ya hecho.
 
+> Guía paso a paso para Windows (instalación, YouTube, problemas frecuentes): [docs/GUIA_LOCAL.md](docs/GUIA_LOCAL.md). Detalles técnicos y de arquitectura: [CLAUDE.md](CLAUDE.md).
+
 ## Instalación
 
 Necesitas Python 3.11+ y `ffmpeg` en el PATH. Una GPU NVIDIA es opcional (acelera Whisper).

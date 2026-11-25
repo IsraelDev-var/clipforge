@@ -59,7 +59,7 @@ class SilencesConfig(BaseModel):
     enabled: bool = True
     max_gap: float = 0.5      # pausas más largas que esto se recortan
     pad: float = 0.12         # margen que se deja a cada lado del corte
-    min_segment: float = 0.2  # tramos más cortos se unen al anterior
+    min_segment: float = 0.2  # tramos aislados más cortos se descartan (ruidos)
 
 
 class Config(BaseModel):

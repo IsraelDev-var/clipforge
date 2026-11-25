@@ -1,4 +1,4 @@
-"""Etapa 2: extrae audio mono 16 kHz → audio.wav."""
+"""Etapa: extrae audio mono 16 kHz → audio.wav."""
 
 from __future__ import annotations
 

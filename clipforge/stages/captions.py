@@ -1,4 +1,4 @@
-"""Etapa 6: subtítulos estilo Shorts con palabra activa resaltada → subs_<n>.ass."""
+"""Etapa: subtítulos estilo Shorts con palabra activa resaltada → subs_<n>.ass."""
 
 from __future__ import annotations
 

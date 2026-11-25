@@ -1,4 +1,4 @@
-"""Etapa 8: clips.json con la información de publicación de cada clip."""
+"""Etapa: clips.json con la información de publicación de cada clip."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Etapa 3: transcripción con faster-whisper → transcript.json."""
+"""Etapa: transcripción con faster-whisper → transcript.json."""
 
 from __future__ import annotations
 

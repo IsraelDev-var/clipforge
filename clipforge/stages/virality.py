@@ -1,4 +1,4 @@
-"""Etapa 5: puntuación de viralidad por clip (criterios de la IA + señales medidas)."""
+"""Etapa: puntuación de viralidad por clip (criterios de la IA + señales medidas)."""
 
 from __future__ import annotations
 

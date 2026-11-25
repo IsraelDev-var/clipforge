@@ -1,4 +1,4 @@
-"""Etapa 4: el LLM elige los mejores momentos → highlights.json."""
+"""Etapa: el LLM elige los mejores momentos → highlights.json."""
 
 from __future__ import annotations
 

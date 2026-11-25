@@ -1,4 +1,4 @@
-"""Etapa 1: descarga (YouTube) o copia (archivo local) → source.mp4."""
+"""Etapa: descarga (YouTube) o copia (archivo local) → source.mp4."""
 
 from __future__ import annotations
 

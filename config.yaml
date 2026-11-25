@@ -34,7 +34,7 @@ silences:
   enabled: true                 # quitar pausas dentro de cada clip
   max_gap: 0.5                  # pausas de más de 0.5 s se recortan…
   pad: 0.12                     # …dejando 0.12 s de margen a cada lado
-  min_segment: 0.2
+  min_segment: 0.2              # tramos aislados más cortos (ruidos) se descartan
 
 layout:
   mode: auto                    # auto | face | split | screen
