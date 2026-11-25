@@ -71,7 +71,10 @@ class Config(BaseModel):
     clips: int = 6
     min_seconds: float = 25
     max_seconds: float = 60
-    llm_model: str = "claude-sonnet-5-5"
+    llm_provider: str = "claude"  # claude | gemini | ollama | openai (cualquier API compatible con OpenAI)
+    llm_model: str | None = None  # None → el modelo por defecto del proveedor
+    llm_base_url: str | None = None  # solo para ollama/openai si no usas la URL por defecto
+    llm_fallback_models: list[str] | None = None  # modelos de reserva si el principal está saturado
     chunk_minutes: float = 10
     chunk_overlap_minutes: float = 1
     output_resolution: tuple[int, int] = (1080, 1920)
@@ -88,6 +91,8 @@ class Secrets(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     anthropic_api_key: str | None = None
+    gemini_api_key: str | None = None
+    openai_api_key: str | None = None
 
 
 def load_config(path: Path | None = None) -> Config:

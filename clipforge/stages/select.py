@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from importlib import resources
 from typing import Any, Protocol, Sequence
 
@@ -140,9 +141,124 @@ class ClaudeLLM:
         return "".join(b.text for b in resp.content if b.type == "text")
 
 
+RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+class OpenAICompatLLM:
+    """Cliente para APIs compatibles con OpenAI (Gemini, Ollama, Groq, OpenRouter…), vía httpx.
+
+    Si un modelo está saturado, sin cuota o no disponible, pasa al siguiente de `fallbacks`
+    y se queda con él para el resto del trabajo.
+    """
+
+    RATE_LIMIT_RETRIES = 4
+    SWITCH_STATUS = RETRY_STATUS | {404}
+
+    def __init__(self, name: str, base_url: str, model: str, api_key: str | None = None,
+                 timeout: float = 600, fallbacks: Sequence[str] = ()) -> None:
+        import httpx
+
+        self._httpx = httpx
+        self.name = name
+        self.models = list(dict.fromkeys([model, *fallbacks]))
+        self._idx = 0
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        self.client = httpx.Client(base_url=base_url.rstrip("/") + "/", headers=headers, timeout=timeout)
+        self._strict_schema = True  # se desactiva si el servidor no acepta json_schema
+
+    @property
+    def model(self) -> str:
+        return self.models[self._idx]
+
+    def _post(self, body: dict, retries: int):
+        httpx = self._httpx
+        for attempt in range(retries + 1):
+            try:
+                resp = self.client.post("chat/completions", json=body)
+            except httpx.HTTPError as exc:
+                hint = " ¿Está Ollama abierto? (ollama serve)" if self.name == "ollama" else ""
+                raise ClipForgeError(f"No se pudo conectar con {self.name}: {exc}.{hint}") from exc
+            if resp.status_code not in RETRY_STATUS or attempt == retries:
+                return resp
+            wait = min(90.0, float(resp.headers.get("retry-after") or 20 * (attempt + 1)))
+            why = "Límite de peticiones" if resp.status_code == 429 else "Servidor saturado"
+            log.warning("%s en %s/%s (%d); espero %.0f s y reintento…",
+                        why, self.name, self.model, resp.status_code, wait)
+            time.sleep(wait)
+        return resp
+
+    def _request(self, system: str, user: str, schema: dict):
+        has_next = self._idx < len(self.models) - 1
+        retries = 1 if has_next else self.RATE_LIMIT_RETRIES
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        body: dict[str, Any] = {"model": self.model, "messages": messages, "temperature": 0.4}
+        if self._strict_schema:
+            body["response_format"] = {"type": "json_schema",
+                                       "json_schema": {"name": "respuesta", "schema": schema}}
+            resp = self._post(body, retries)
+            if resp.status_code != 400:
+                return resp
+            log.info("%s no acepta json_schema; uso modo JSON simple", self.name)
+            self._strict_schema = False
+        messages[0]["content"] = (system + "\n\nResponde SOLO con un JSON válido que cumpla este esquema:\n"
+                                  + json.dumps(schema, ensure_ascii=False))
+        body["response_format"] = {"type": "json_object"}
+        return self._post(body, retries)
+
+    def complete(self, system: str, user: str, schema: dict) -> str:
+        resp = self._request(system, user, schema)
+        while resp.status_code in self.SWITCH_STATUS and self._idx < len(self.models) - 1:
+            old = self.model
+            self._idx += 1
+            log.warning("%s no responde (%d); cambio a %s", old, resp.status_code, self.model)
+            resp = self._request(system, user, schema)
+
+        if resp.status_code in (401, 403):
+            raise ClipForgeError(f"Clave de API de {self.name} inválida o ausente. Revisa tu .env.")
+        if resp.status_code == 429:
+            raise ClipForgeError(f"Límite gratuito de {self.name} alcanzado. Espera (o vuelve mañana) y usa "
+                                 "`clipforge resume <job> --from select`.")
+        if resp.status_code == 404 and self.name == "ollama":
+            raise ClipForgeError(f"Ollama no tiene el modelo «{self.model}». Descárgalo con: ollama pull {self.model}")
+        if resp.status_code in RETRY_STATUS:
+            raise ClipForgeError(f"{self.name} está saturado ahora mismo ({resp.status_code}). Prueba en unos minutos "
+                                 "con `clipforge resume <job> --from select`.")
+        if resp.status_code >= 400:
+            raise ClipForgeError(f"Error de {self.name}/{self.model} ({resp.status_code}): {resp.text[:500]}")
+        try:
+            return resp.json()["choices"][0]["message"]["content"] or ""
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            raise ClipForgeError(f"Respuesta inesperada de {self.name}: {resp.text[:500]}") from exc
+
+
+PROVIDERS = {
+    # nombre: (URL base, modelos por defecto: el primero y los de reserva, en orden)
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/",
+               ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest",
+                "gemini-3-flash-preview", "gemini-flash-lite-latest"]),
+    "ollama": ("http://localhost:11434/v1/", ["qwen2.5:7b"]),
+    "openai": ("https://api.openai.com/v1/", ["gpt-4o-mini"]),
+}
+
+
 def make_llm(cfg: Config) -> LLM:
     secrets = Secrets()
-    return ClaudeLLM(cfg.llm_model, secrets.anthropic_api_key)
+    provider = cfg.llm_provider.lower().strip()
+    if provider == "claude":
+        return ClaudeLLM(cfg.llm_model or "claude-sonnet-5-5", secrets.anthropic_api_key)
+    if provider not in PROVIDERS:
+        raise ClipForgeError(f"llm_provider desconocido: «{cfg.llm_provider}». "
+                             "Usa claude, gemini, ollama u openai.")
+    base_url, defaults = PROVIDERS[provider]
+    key = {"gemini": secrets.gemini_api_key, "openai": secrets.openai_api_key}.get(provider)
+    if provider == "gemini" and not key:
+        raise ClipForgeError("Falta GEMINI_API_KEY en .env (consíguela gratis en https://aistudio.google.com/apikey).")
+    if cfg.llm_fallback_models is not None:
+        fallbacks = cfg.llm_fallback_models
+    else:
+        fallbacks = [] if cfg.llm_model else defaults[1:]
+    return OpenAICompatLLM(provider, cfg.llm_base_url or base_url, cfg.llm_model or defaults[0], key,
+                           fallbacks=fallbacks)
 
 
 def _ask_clips(llm: LLM, system: str, user: str) -> list[Candidate]:

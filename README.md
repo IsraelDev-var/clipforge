@@ -16,8 +16,21 @@ Necesitas Python 3.11+ y `ffmpeg` en el PATH. Una GPU NVIDIA es opcional (aceler
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-cp .env.example .env             # y pon tu ANTHROPIC_API_KEY
+cp .env.example .env             # y pon la clave del proveedor de IA que uses
 ```
+
+### IA para elegir los clips
+
+Se elige con `llm_provider` en `config.yaml`:
+
+| Proveedor | Coste | Qué necesitas |
+|---|---|---|
+| `gemini` (por defecto) | Gratis, con límite diario | `GEMINI_API_KEY` de https://aistudio.google.com/apikey (sin tarjeta) |
+| `ollama` | Gratis, local y sin internet | [Ollama](https://ollama.com) instalado y `ollama pull qwen2.5:7b` |
+| `claude` | De pago | `ANTHROPIC_API_KEY` |
+| `openai` | Depende | Cualquier API compatible con OpenAI: `llm_base_url` + `OPENAI_API_KEY` |
+
+Con `llm_model` cambias el modelo del proveedor. Si el nivel gratuito de Gemini se agota, espera y continúa con `clipforge resume <job_id> --from select`.
 
 **Fuente (opcional):** descarga Montserrat ExtraBold (Google Fonts) y copia el `.ttf` en `fonts/`. Si no la pones, libass usa una fuente del sistema.
 
@@ -79,13 +92,13 @@ El resultado (id, enlace, visibilidad, fecha) se guarda en `clips.json`, y no se
 
 ## Configuración
 
-`config.yaml` define el modelo de Whisper, el modelo de Claude, las duraciones, el estilo de los subtítulos y el suavizado del encuadre. Los flags de la CLI tienen prioridad. La clave de API solo se lee de `.env` o del entorno.
+`config.yaml` define el modelo de Whisper, el proveedor y modelo de IA, las duraciones, el estilo de los subtítulos y el suavizado del encuadre. Los flags de la CLI tienen prioridad. Las claves de API solo se leen de `.env` o del entorno.
 
 En CPU, `whisper_model: small` es bastante más rápido que `medium`, a cambio de algo de precisión.
 
 ## Notas de diseño
 
-- **Selección:** la transcripción se divide en bloques de 10 min con 1 min de solapamiento. Claude propone candidatos por bloque con salida JSON estructurada, que se valida con pydantic (hasta 2 reintentos). Después se ajustan los tiempos a límites de palabra, se descartan los clips fuera de rango, se quitan solapes (gana el mayor score) y una pasada final elige los N mejores.
+- **Selección:** la transcripción se divide en bloques de 10 min con 1 min de solapamiento. El LLM propone candidatos por bloque con salida JSON estructurada, que se valida con pydantic (hasta 2 reintentos). Después se ajustan los tiempos a límites de palabra, se descartan los clips fuera de rango, se quitan solapes (gana el mayor score) y una pasada final elige los N mejores.
 - **Diseño por clip:** se analizan unas 24 muestras de cada clip y se elige automáticamente entre tres diseños:
   - **cara:** recorte 9:16 que sigue al presentador;
   - **dividido:** la cara es pequeña (menos del 6 % del ancho, típico de una webcam superpuesta) y la imagen tiene muchas zonas de color plano (editor o pantalla). Queda la cámara arriba (40 %) y la pantalla abajo (60 %), con los subtítulos sobre la línea divisoria;
