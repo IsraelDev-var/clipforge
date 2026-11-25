@@ -45,6 +45,38 @@ Etapas para `--from`: `ingest, audio, transcribe, select, reframe, captions, ren
 
 Salida en `data/<job_id>/`: `clip_<n>.mp4` (1080×1920) y `clips.json`.
 
+## Publicar en YouTube Shorts
+
+Se usa la API oficial (YouTube Data API v3) con tu propio cliente OAuth. Se configura una sola vez:
+
+1. En https://console.cloud.google.com crea un proyecto y activa **YouTube Data API v3**.
+2. En **Pantalla de consentimiento OAuth** elige tipo «Externo» y añade tu cuenta de Google como usuario de prueba.
+3. En **Credenciales** pulsa «Crear ID de cliente OAuth», elige «App de escritorio» y descarga el JSON.
+4. Guárdalo como `client_secret.json` en la carpeta del proyecto. Está en `.gitignore`, no lo subas.
+5. Ejecuta `clipforge youtube login`. Se abre el navegador; autoriza tu canal. El token queda en `~/.config/clipforge/youtube_token.json`.
+
+```bash
+clipforge youtube status                                  # qué canal está conectado
+clipforge publish <job_id>                                # sube todos los clips pendientes (privados por defecto)
+clipforge publish <job_id> --clip 3 --privacy unlisted
+clipforge publish <job_id> --schedule "2026-12-01 18:00" --every 24   # uno al día, los más virales primero
+clipforge youtube logout
+```
+
+En la web, cada clip tiene el botón «Publicar en YouTube». Desde ahí editas título y descripción, eliges la visibilidad o una fecha programada y ves el progreso de la subida.
+
+**Qué sube:**
+- **Título:** el del clip, con `#Shorts` añadido (o en la descripción si no cabe en 100 caracteres).
+- **Descripción:** la del clip, más los hashtags y el enlace al minuto exacto del directo original, si vino de YouTube.
+- **Etiquetas:** los hashtags del clip.
+- **Visibilidad:** privada por defecto. Al programar, el video se sube como privado y YouTube lo publica a la hora indicada.
+
+El resultado (id, enlace, visibilidad, fecha) se guarda en `clips.json`, y no se sube dos veces el mismo clip salvo con `--force`.
+
+**Ten en cuenta (compruébalo en la documentación de Google, porque cambia):**
+- **Apps sin verificar:** los proyectos de API nuevos que no han pasado la auditoría de Google pueden ver sus subidas restringidas a privado. Para publicar en público desde la API hay que solicitar esa auditoría. Mientras tanto, sube como privado y cambia la visibilidad desde YouTube Studio.
+- **Cuota:** la cuota diaria por defecto de la API solo da para unas pocas subidas al día. Si se agota, ClipForge lo indica y basta con reintentar al día siguiente.
+
 ## Configuración
 
 `config.yaml` define el modelo de Whisper, el modelo de Claude, las duraciones, el estilo de los subtítulos y el suavizado del encuadre. Los flags de la CLI tienen prioridad. La clave de API solo se lee de `.env` o del entorno.

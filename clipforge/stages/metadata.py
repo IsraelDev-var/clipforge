@@ -36,6 +36,7 @@ def run_stage(job: Job, cfg: Config) -> None:
             "hashtags": c.get("hashtags", []),
             "hook": c.get("hook", ""),
             "reason": c.get("reason", ""),
+            "youtube": c.get("youtube"),
         }
         for c in job.load_json("highlights.json")["clips"]
     ]

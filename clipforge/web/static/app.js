@@ -16,6 +16,7 @@ const store = {
 };
 let pollTimer = null;
 let config = null;
+let ytStatus = null;
 
 // ---------- utilidades ----------
 
@@ -213,12 +214,16 @@ async function renderJob(id) {
   const base = `/api/jobs/${encodeURIComponent(job.id)}`;
 
   const source = job.title || job.source || "";
+  if (!ytStatus) ytStatus = await api("/api/youtube/status").catch(() => ({ connected: false }));
   const head = h("div", { class: "jobhead" },
     h("div", {},
       h("p", { class: "small" }, h("a", { href: "#/" }, "← Trabajos")),
       h("h1", {}, job.id),
       h("div", { class: "muted small" }, source,
-        job.video ? ` · ${job.video.width}×${job.video.height} · ${fmt(job.video.duration)}` : "")),
+        job.video ? ` · ${job.video.width}×${job.video.height} · ${fmt(job.video.duration)}` : ""),
+      h("div", { class: "small muted" }, ytStatus.connected
+        ? `YouTube: conectado a «${ytStatus.channel.title}»`
+        : "YouTube: no conectado (ejecuta `clipforge youtube login` en tu PC para publicar)")),
     h("div", { class: "actions" },
       badge(st),
       job.clips.length > 1 ? sortSelect(job.id) : null,
@@ -232,7 +237,7 @@ async function renderJob(id) {
   const idx = stages.indexOf(st.stage);
   const steps = h("div", { class: "steps", style: `--n:${stages.length}` }, stages.map((s, i) => {
     let cls = "";
-    if (st.state === "done") cls = "done";
+    if (st.state === "done" || (st.stage && idx < 0)) cls = "done";
     else if (idx >= 0 && i < idx) cls = "done";
     else if (i === idx) cls = st.state === "error" ? "error" : st.state === "running" ? "running" : "";
     return h("div", { class: `step ${cls}` }, STAGE_LABELS[s] || s);
@@ -249,7 +254,7 @@ async function renderJob(id) {
   const order = store.get("cf-order") || "time";
   const sorted = [...job.clips].sort((a, b) =>
     order === "virality" ? (b.virality?.score ?? 0) - (a.virality?.score ?? 0) : a.start - b.start);
-  const sig = job.id + "|" + order + "|" + sorted.map((c) => `${c.n}:${c.version}:${c.start}:${c.end}:${c.virality?.score}`).join(",");
+  const sig = job.id + "|" + order + "|" + sorted.map((c) => `${c.n}:${c.version}:${c.start}:${c.end}:${c.virality?.score}:${c.youtube?.id}:${c.layout_used}`).join(",");
   let clips = app.querySelector(".clips");
   if (!clips || clips.dataset.sig !== sig) {
     clips = job.clips.length ? h("div", { class: "clips", "data-sig": sig }, sorted.map((c) => clipCard(job, c))) : null;
@@ -302,7 +307,10 @@ function clipCard(job, c) {
       h("button", { class: "ghost", onclick: save, "data-lock": true }, "Guardar texto"),
       h("button", { class: "ghost", onclick: copy }, "Copiar texto"),
       job.has_source ? h("button", { class: "ghost", onclick: () => openAdjust(job, c), "data-lock": true }, "✂ Ajustar inicio/fin") : null,
-      c.file ? h("a", { class: "btn", href: `${base}/files/${c.file}?download=1` }, "⬇ MP4") : null),
+      c.file ? h("a", { class: "btn", href: `${base}/files/${c.file}?download=1` }, "⬇ MP4") : null,
+      c.file ? h("button", { class: "ghost", onclick: () => openPublish(job, c), "data-lock": true },
+        c.youtube ? "⬆ Volver a publicar" : "⬆ Publicar en YouTube") : null,
+      c.youtube ? h("a", { class: "btn yt", href: c.youtube.url, target: "_blank", rel: "noopener" }, ytLabel(c.youtube)) : null),
   );
 }
 
@@ -310,6 +318,16 @@ function durationText(c) {
   const src = c.end - c.start, out = c.edited_duration ?? src;
   const cut = src - out;
   return cut >= 0.1 ? `${out.toFixed(1)} s (−${cut.toFixed(1)} s de silencios)` : `${src.toFixed(1)} s`;
+}
+
+const PRIVACY_LABELS = { private: "privado", unlisted: "oculto", public: "público" };
+
+function ytLabel(y) {
+  if (y.publish_at) {
+    const d = new Date(y.publish_at);
+    if (d > new Date()) return `▶ Programado ${d.toLocaleString("es", { dateStyle: "short", timeStyle: "short" })}`;
+  }
+  return `▶ En YouTube (${PRIVACY_LABELS[y.privacy] || y.privacy})`;
 }
 
 function sortSelect(id) {
@@ -440,6 +458,64 @@ document.getElementById("adj-save").onclick = async () => {
       { method: "POST", json: { start, end, cut_silences: adjCut.checked, layout: adjLayout.value } });
     dlg.close();
     toast(`Re-exportando clip #${clip.n}…`);
+    renderJob(job.id);
+  } catch (err) { toast(err.message, true); }
+};
+
+// ---------- diálogo de publicación ----------
+
+const pub = document.getElementById("publish");
+const pubTitle = document.getElementById("pub-title");
+const pubDesc = document.getElementById("pub-desc");
+const pubPrivacy = document.getElementById("pub-privacy");
+const pubSchedule = document.getElementById("pub-schedule");
+const pubWhen = document.getElementById("pub-when");
+const pubInfo = document.getElementById("pub-info");
+let pubCtx = null;
+
+pubSchedule.onchange = () => {
+  pubWhen.disabled = !pubSchedule.checked;
+  pubPrivacy.disabled = pubSchedule.checked;
+  if (pubSchedule.checked) pubPrivacy.value = "private";
+  if (pubSchedule.checked && !pubWhen.value) {
+    const d = new Date(Date.now() + 24 * 3600e3);
+    d.setMinutes(0, 0, 0);
+    pubWhen.value = new Date(d - d.getTimezoneOffset() * 60e3).toISOString().slice(0, 16);
+  }
+};
+
+async function openPublish(job, c) {
+  ytStatus = await api("/api/youtube/status?refresh=true").catch(() => ({ connected: false }));
+  if (!ytStatus.connected) {
+    return toast("YouTube no está conectado: ejecuta `clipforge youtube login` en tu PC.", true);
+  }
+  let preview;
+  try { preview = await api(`/api/jobs/${encodeURIComponent(job.id)}/clips/${c.n}/youtube`); }
+  catch (err) { return toast(err.message, true); }
+  pubCtx = { job, clip: c };
+  document.getElementById("pub-heading").textContent = `Publicar clip #${c.n} en YouTube`;
+  document.getElementById("pub-channel").textContent = `Canal: «${ytStatus.channel.title}»`;
+  pubTitle.value = preview.snippet.title;
+  pubDesc.value = preview.snippet.description;
+  pubPrivacy.value = preview.privacy;
+  pubSchedule.checked = false;
+  pubWhen.value = "";
+  pubSchedule.onchange();
+  pubInfo.textContent = c.youtube ? `Ya está subido (${c.youtube.url}). Se subirá una copia nueva.` : "";
+  pub.showModal();
+}
+
+document.getElementById("pub-save").onclick = async () => {
+  const { job, clip } = pubCtx;
+  const body = { title: pubTitle.value, description: pubDesc.value, privacy: pubPrivacy.value, force: !!clip.youtube };
+  if (pubSchedule.checked) {
+    if (!pubWhen.value) return toast("Elige la fecha de publicación.", true);
+    body.publish_at = new Date(pubWhen.value).toISOString();
+  }
+  try {
+    await api(`/api/jobs/${encodeURIComponent(job.id)}/clips/${clip.n}/publish`, { method: "POST", json: body });
+    pub.close();
+    toast(`Subiendo clip #${clip.n} a YouTube…`);
     renderJob(job.id);
   } catch (err) { toast(err.message, true); }
 };

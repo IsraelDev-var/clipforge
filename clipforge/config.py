@@ -45,6 +45,16 @@ class LayoutConfig(BaseModel):
     captions_screen_y: float = 0.87  # … y en «solo pantalla»
 
 
+class YouTubeConfig(BaseModel):
+    client_secrets: str = "client_secret.json"            # descargado de Google Cloud (no se sube a git)
+    token: str = "~/.config/clipforge/youtube_token.json"  # se crea al hacer login
+    privacy: str = "private"                              # private | unlisted | public
+    category_id: str = "28"                               # 28 = Ciencia y tecnología, 27 = Educación
+    default_language: str | None = "es"
+    add_shorts_tag: bool = True
+    footer: str | None = "Directo completo: {source_url}"
+
+
 class SilencesConfig(BaseModel):
     enabled: bool = True
     max_gap: float = 0.5      # pausas más largas que esto se recortan
@@ -70,6 +80,7 @@ class Config(BaseModel):
     reframe: ReframeConfig = Field(default_factory=ReframeConfig)
     silences: SilencesConfig = Field(default_factory=SilencesConfig)
     layout: LayoutConfig = Field(default_factory=LayoutConfig)
+    youtube: YouTubeConfig = Field(default_factory=YouTubeConfig)
 
 
 class Secrets(BaseSettings):

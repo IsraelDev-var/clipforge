@@ -22,6 +22,8 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]",
     "python-multipart",
+    "google-api-python-client",
+    "google-auth-oauthlib",
 ]
 
 [project.optional-dependencies]

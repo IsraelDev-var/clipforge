@@ -50,6 +50,34 @@
     </form>
   </dialog>
 
+  <dialog id="publish">
+    <form method="dialog" class="adjust">
+      <header>
+        <h2 id="pub-heading">Publicar en YouTube</h2>
+        <button class="icon" value="cancel" aria-label="Cerrar">✕</button>
+      </header>
+      <p class="muted small" id="pub-channel"></p>
+      <label>Título (máx. 100) <input type="text" id="pub-title" maxlength="100"></label>
+      <label>Descripción <textarea id="pub-desc" rows="6"></textarea></label>
+      <div class="adj-opts">
+        <label>Visibilidad
+          <select id="pub-privacy">
+            <option value="private">Privado</option>
+            <option value="unlisted">Oculto (con enlace)</option>
+            <option value="public">Público</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="pub-schedule"> Programar</label>
+        <label>Fecha y hora <input type="datetime-local" id="pub-when" disabled></label>
+      </div>
+      <p class="muted small" id="pub-info"></p>
+      <footer>
+        <span class="muted small">Programar sube el video como privado y YouTube lo publica a esa hora.</span>
+        <button type="button" id="pub-save" class="primary">Subir a YouTube</button>
+      </footer>
+    </form>
+  </dialog>
+
   <div id="toast" role="status"></div>
   <script src="/app.js"></script>
 </body>

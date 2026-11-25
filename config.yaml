@@ -48,3 +48,12 @@ reframe:
   sample_fps: 5
   smoothing: 0.15               # alfa de la media móvil exponencial (0-1, menor = más suave)
   dead_zone: 0.06               # fracción del ancho de recorte que la cara puede moverse sin reencuadrar
+
+youtube:
+  client_secrets: client_secret.json   # OAuth «App de escritorio» de Google Cloud (ver README)
+  token: ~/.config/clipforge/youtube_token.json
+  privacy: private                     # private | unlisted | public (programar siempre sube como privado)
+  category_id: "28"                    # 28 = Ciencia y tecnología, 27 = Educación
+  default_language: es
+  add_shorts_tag: true                 # añade #Shorts al título (o a la descripción si no cabe)
+  footer: "Directo completo: {source_url}"   # enlace al momento exacto del directo, si vino de YouTube

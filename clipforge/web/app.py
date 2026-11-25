@@ -7,6 +7,7 @@ import logging
 import re
 import shutil
 import threading
+import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -21,6 +22,7 @@ from clipforge import ClipForgeError
 from clipforge.config import Config, load_config
 from clipforge.job import DATA_DIR, Job, create_job, open_job
 from clipforge.pipeline import STAGES, rerender_clip, run_pipeline
+from clipforge.publish import youtube as yt
 from clipforge.stages import metadata
 from clipforge.stages.reframe import LAYOUTS, track_name
 from clipforge.stages.render import clip_name
@@ -74,6 +76,14 @@ class ClipTimes(BaseModel):
     end: float
     cut_silences: bool | None = None
     layout: str | None = None
+
+
+class PublishReq(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    privacy: str | None = None
+    publish_at: str | None = None  # ISO 8601 (la web lo manda en UTC)
+    force: bool = False
 
 
 class ResumeReq(BaseModel):
@@ -217,6 +227,69 @@ def create_app(data_dir: Path = DATA_DIR, config_path: Path | None = None) -> Fa
             raise HTTPException(422, f"Etapa desconocida: {body.from_stage}")
         c = cfg()
         worker.submit(job, lambda: run_pipeline(job, c, body.from_stage))
+        return {"ok": True}
+
+    # ---------- YouTube ----------
+    yt_cache: dict = {"t": 0.0, "data": None}
+
+    @app.get("/api/youtube/status")
+    def youtube_status(refresh: bool = False) -> dict:
+        now = time.time()
+        if refresh or yt_cache["data"] is None or now - yt_cache["t"] > 120:
+            yt_cache.update(t=now, data=yt.connection_status(cfg().youtube))
+        return yt_cache["data"]
+
+    def get_clip(job: Job, n: int) -> dict:
+        clip = next((c for c in job.load_json("highlights.json")["clips"] if c["n"] == n), None)
+        if clip is None:
+            raise HTTPException(404, f"El clip {n} no existe.")
+        return clip
+
+    @app.get("/api/jobs/{job_id}/clips/{n}/youtube")
+    def youtube_preview(job_id: str, n: int) -> dict:
+        job = get_job(job_id)
+        c = cfg()
+        return {"snippet": yt.build_metadata(get_clip(job, n), job.meta.get("source"), c.youtube),
+                "privacy": c.youtube.privacy}
+
+    @app.post("/api/jobs/{job_id}/clips/{n}/publish", status_code=202)
+    def publish(job_id: str, n: int, body: PublishReq) -> dict:
+        job = get_job(job_id)
+        ensure_idle(job)
+        clip = get_clip(job, n)
+        if clip.get("youtube") and not body.force:
+            raise HTTPException(409, f"Este clip ya está en YouTube: {clip['youtube']['url']}")
+        c = cfg()
+        try:
+            when = yt.parse_when(body.publish_at) if body.publish_at else None
+            yt.build_status(body.privacy or c.youtube.privacy, when)  # valida antes de encolar
+        except ClipForgeError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        if not yt.connection_status(c.youtube)["connected"]:
+            raise HTTPException(409, "YouTube no está conectado. Ejecuta `clipforge youtube login` en tu PC.")
+
+        def task() -> None:
+            last = [-100]
+
+            def progress(p: float) -> None:
+                pct = int(p * 100)
+                if pct - last[0] >= 5 or pct == 100:
+                    last[0] = pct
+                    job.set_status("running", "publish", f"Subiendo clip {n} a YouTube: {pct} %")
+
+            job.set_status("running", "publish", f"Subiendo clip {n} a YouTube…")
+            try:
+                yt.publish_clip(job, c, n, body.privacy, when, body.title, body.description, body.force,
+                                progress=progress)
+            except ClipForgeError as exc:
+                job.set_status("error", "publish", str(exc))
+                raise
+            except Exception as exc:
+                job.set_status("error", "publish", f"Error inesperado al subir: {exc}")
+                raise
+            job.set_status("done")
+
+        worker.submit(job, task)
         return {"ok": True}
 
     @app.delete("/api/jobs/{job_id}")

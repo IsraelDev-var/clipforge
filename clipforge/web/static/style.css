@@ -132,6 +132,9 @@ select { background: var(--panel-2); border: 1px solid var(--line); border-radiu
 .tips { margin: 10px 0 0; padding-left: 18px; }
 .tips li + li { margin-top: 4px; }
 .ok { color: var(--ok); }
+a.btn.yt { border-color: #ff4e45; color: #ffb3ae; }
+input[type=datetime-local] { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; margin-top: 4px; display: block; }
+input:disabled, select:disabled { opacity: .5; }
 .chip { border: 1px solid var(--line); border-radius: 99px; padding: 0 8px; font-size: 12px; }
 .adj-opts { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; }
 .adj-opts select { margin-top: 4px; display: block; }
