@@ -9,7 +9,16 @@ clips: 6
 min_seconds: 25
 max_seconds: 60
 
-llm_model: claude-sonnet-5-5
+# IA que elige los clips:
+#   gemini → gratis con GEMINI_API_KEY (https://aistudio.google.com/apikey), sin tarjeta
+#   ollama → gratis y local (instala Ollama y haz `ollama pull qwen2.5:7b`)
+#   claude → de pago, con ANTHROPIC_API_KEY
+#   openai → cualquier API compatible con OpenAI (pon llm_base_url y OPENAI_API_KEY)
+llm_provider: gemini
+llm_model:                      # vacío = el de por defecto (gemini-3.6-flash, qwen2.5:7b, claude-sonnet-5-5…)
+llm_base_url:                   # vacío = la URL por defecto del proveedor
+llm_fallback_models:            # vacío = reservas por defecto; si un modelo está saturado se pasa al siguiente
+                                # ej.: [gemini-3.5-flash, gemini-flash-lite-latest]
 chunk_minutes: 10
 chunk_overlap_minutes: 1
 
