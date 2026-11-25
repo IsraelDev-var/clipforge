@@ -117,7 +117,7 @@ button.icon { background: none; border: 0; cursor: pointer; font-size: 18px; col
 .viral.medio { background: var(--accent); }
 .viral.bajo { background: #ff8a5d; }
 .viral.none { background: var(--panel-2); color: var(--muted); }
-select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
 .clip > .viral-details { grid-column: 1 / -1; }
 .viral-details { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .viral-details summary { cursor: pointer; font-weight: 600; }
@@ -132,6 +132,10 @@ select { background: var(--panel-2); border: 1px solid var(--line); border-radiu
 .tips { margin: 10px 0 0; padding-left: 18px; }
 .tips li + li { margin-top: 4px; }
 .ok { color: var(--ok); }
+.chip { border: 1px solid var(--line); border-radius: 99px; padding: 0 8px; font-size: 12px; }
+.adj-opts { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; }
+.adj-opts select { margin-top: 4px; display: block; }
+label > select { margin-top: 4px; display: block; width: 100%; }
 .clip .text { font-size: 13px; color: var(--muted); max-height: 5.4em; overflow: auto; }
 .clip .fields > * + * { margin-top: 8px; }
 .clip .fields input, .clip .fields textarea { padding: 6px 8px; font-size: 14px; }

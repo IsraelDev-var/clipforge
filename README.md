@@ -26,6 +26,7 @@ cp .env.example .env             # y pon tu ANTHROPIC_API_KEY
 ```bash
 clipforge run "https://www.youtube.com/watch?v=XXXX" --clips 8 --min 25 --max 60
 clipforge run ./mi_directo.mp4 --clips 5 --no-faces --keep-silences
+clipforge run ./directo_con_pantalla.mp4 --layout split
 clipforge resume <job_id> --from select        # re-ejecuta desde una etapa
 clipforge render <job_id> --clip 3 --start 120.5 --end 165.0   # ajuste manual
 clipforge jobs                                 # lista trabajos
@@ -53,6 +54,12 @@ En CPU, `whisper_model: small` es bastante más rápido que `medium`, a cambio d
 ## Notas de diseño
 
 - **Selección:** la transcripción se divide en bloques de 10 min con 1 min de solapamiento. Claude propone candidatos por bloque con salida JSON estructurada, que se valida con pydantic (hasta 2 reintentos). Después se ajustan los tiempos a límites de palabra, se descartan los clips fuera de rango, se quitan solapes (gana el mayor score) y una pasada final elige los N mejores.
+- **Diseño por clip:** se analizan unas 24 muestras de cada clip y se elige automáticamente entre tres diseños:
+  - **cara:** recorte 9:16 que sigue al presentador;
+  - **dividido:** la cara es pequeña (menos del 6 % del ancho, típico de una webcam superpuesta) y la imagen tiene muchas zonas de color plano (editor o pantalla). Queda la cámara arriba (40 %) y la pantalla abajo (60 %), con los subtítulos sobre la línea divisoria;
+  - **solo pantalla:** no hay cara y sí pantalla. El código va centrado sobre un fondo desenfocado y los subtítulos debajo.
+
+  La zona de pantalla es una ventana fija, para que el código se lea, colocada donde hay más actividad (escritura, scroll) y más texto, y evitando la webcam. Para webcams pequeñas se busca la cara a 1280 px con OpenCV. Se puede forzar el diseño con `--layout auto|face|split|screen` en `run`, `resume` o `render`, o por clip desde la web. Los umbrales están en `layout` dentro de `config.yaml`; se calibraron con videos sintéticos, así que conviene revisarlos con directos reales. `crop_track_<n>.json` guarda las métricas medidas.
 - **Eliminación de silencios:** dentro de cada clip se recortan las pausas de más de 0,5 s entre palabras, además del silencio inicial y final, dejando 0,12 s de margen para que el corte suene natural. Todo se hace en el mismo pase de ffmpeg (`select`/`aselect`): el encuadre usa los tiempos originales y los subtítulos y la viralidad, los ya recortados. Está activada por defecto (`silences` en `config.yaml`). Se desactiva con `--keep-silences` en `run`, `resume` o `render`, o por clip desde la web. La selección usa la duración original, así que un clip puede quedar algo por debajo de `--min` tras recortar.
 - **Viralidad (0–100):** el 70 % sale de la IA, que valora del 1 al 10 el gancho, si el clip se entiende solo, su valor, la emoción y si invita a compartir. Lo hace en la misma llamada de selección, sin coste extra. El 30 % sale de señales medidas en el propio clip: tiempo hasta la primera palabra, palabras por segundo, porcentaje de silencios, cierre en fin de frase, duración y variación del volumen. Una pregunta en el gancho suma 3 puntos. Cada clip recibe además consejos concretos, y la puntuación se recalcula al re-exportar. Está en `clips.json` y en la web, donde puedes ordenar por viralidad. Recalcular: `clipforge resume <job_id> --from virality`.
 - **Reframe:** detecta la cara a 5 fps con MediaPipe y, si no la encuentra (por ejemplo, una webcam pequeña), usa el detector Haar de OpenCV. Aplica una zona muerta y una media móvil exponencial en ambos sentidos, sin retardo. El recorte se mueve con `sendcmd` de ffmpeg, interpolado fotograma a fotograma.

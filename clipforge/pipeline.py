@@ -68,7 +68,7 @@ def run_pipeline(job: Job, cfg: Config, from_stage: str | None = None) -> None:
 
 
 def rerender_clip(job: Job, cfg: Config, n: int, start: float | None, end: float | None,
-                  cut_silences: bool | None = None) -> None:
+                  cut_silences: bool | None = None, layout: str | None = None) -> None:
     """Ajuste manual de un clip: actualiza inicio/fin y rehace reframe, subtítulos, render y metadata."""
     require_ffmpeg()
     data = job.load_json("highlights.json")
@@ -83,6 +83,10 @@ def rerender_clip(job: Job, cfg: Config, n: int, start: float | None, end: float
     clip.update(start=round(new_start, 3), end=round(new_end, 3), duration=round(new_end - new_start, 3))
     if cut_silences is not None:
         clip["cut_silences"] = cut_silences
+    if layout is not None:
+        if layout not in ("auto", "face", "split", "screen"):
+            raise ClipForgeError(f"Diseño desconocido «{layout}». Opciones: auto, face, split, screen.")
+        clip["layout"] = None if layout == "auto" else layout
     job.save_json("highlights.json", data)
     for name in _PER_CLIP[:-1]:
         log.info("%s (clip %d)…", name, n)

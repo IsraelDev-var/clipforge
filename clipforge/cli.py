@@ -48,6 +48,8 @@ def run(
     faces: bool = typer.Option(True, "--faces/--no-faces", help="Seguir la cara (o recorte centrado)"),
     silences: Optional[bool] = typer.Option(None, "--cut-silences/--keep-silences",
                                             help="Quitar pausas dentro de los clips (por defecto: config.yaml)"),
+    layout: Optional[str] = typer.Option(None, "--layout",
+                                         help="Diseño: auto | face (cara) | split (webcam + pantalla) | screen"),
     job_id: Optional[str] = typer.Option(None, "--job-id", help="Id del trabajo (por defecto, automático)"),
     config: Optional[Path] = ConfigOpt,
     data_dir: Path = DataOpt,
@@ -60,7 +62,10 @@ def run(
         cfg = load_config(config)
         opts = {"clips": clips or cfg.clips, "min": min_s or cfg.min_seconds,
                 "max": max_s or cfg.max_seconds, "faces": faces,
-                "silences": cfg.silences.enabled if silences is None else silences}
+                "silences": cfg.silences.enabled if silences is None else silences,
+                "layout": layout or cfg.layout.mode}
+        if opts["layout"] not in ("auto", "face", "split", "screen"):
+            raise ClipForgeError("--layout debe ser auto, face, split o screen.")
         if opts["min"] >= opts["max"]:
             raise ClipForgeError("--min debe ser menor que --max.")
         if not source.startswith(("http://", "https://")) and Path(source).exists():
@@ -84,6 +89,8 @@ def resume(
     max_s: Optional[float] = typer.Option(None, "--max"),
     faces: Optional[bool] = typer.Option(None, "--faces/--no-faces"),
     silences: Optional[bool] = typer.Option(None, "--cut-silences/--keep-silences"),
+    layout: Optional[str] = typer.Option(None, "--layout",
+                                         help="Diseño: auto | face (cara) | split (webcam + pantalla) | screen"),
     config: Optional[Path] = ConfigOpt,
     data_dir: Path = DataOpt,
     verbose: bool = VerboseOpt,
@@ -94,7 +101,7 @@ def resume(
     def go() -> None:
         job = open_job(job_id, data_dir)
         for key, val in {"clips": clips, "min": min_s, "max": max_s, "faces": faces,
-                         "silences": silences}.items():
+                         "silences": silences, "layout": layout}.items():
             if val is not None:
                 job.options[key] = val
         job.save_meta()
@@ -112,13 +119,15 @@ def render(
     end: Optional[float] = typer.Option(None, "--end", help="Nuevo final (s del video original)"),
     silences: Optional[bool] = typer.Option(None, "--cut-silences/--keep-silences",
                                             help="Quitar o mantener las pausas en este clip"),
+    layout: Optional[str] = typer.Option(None, "--layout",
+                                         help="Diseño: auto | face (cara) | split (webcam + pantalla) | screen"),
     config: Optional[Path] = ConfigOpt,
     data_dir: Path = DataOpt,
     verbose: bool = VerboseOpt,
 ) -> None:
     """Ajusta manualmente inicio/fin de un clip y lo vuelve a exportar."""
     _setup(verbose)
-    _guard(lambda: rerender_clip(open_job(job_id, data_dir), load_config(config), clip, start, end, silences))
+    _guard(lambda: rerender_clip(open_job(job_id, data_dir), load_config(config), clip, start, end, silences, layout))
 
 
 @app.command()

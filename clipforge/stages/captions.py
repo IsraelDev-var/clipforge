@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Sequence
 
@@ -79,9 +80,21 @@ def build_events(chunks: list[list[Word]], cc: CaptionsConfig) -> list[tuple[flo
     return events
 
 
-def build_ass(words: Sequence[Word], cc: CaptionsConfig, resolution: tuple[int, int]) -> str:
+def margin_for_layout(mode: str, cfg: Config) -> int:
+    """Margen inferior de los subtítulos según el diseño del clip."""
+    h = cfg.output_resolution[1]
+    center = {"split": cfg.layout.captions_split_y, "screen": cfg.layout.captions_screen_y}.get(mode)
+    if center is None:
+        return cfg.captions.margin_v
+    # centro del texto en `center`: el margen se mide desde abajo hasta la base del texto
+    return int(h - center * h - cfg.captions.size / 2)
+
+
+def build_ass(words: Sequence[Word], cc: CaptionsConfig, resolution: tuple[int, int],
+              margin_v: int | None = None) -> str:
     """Documento .ass completo para un clip (tiempos ya relativos)."""
     w, h = resolution
+    margin_v = cc.margin_v if margin_v is None else margin_v
     chunks = group_words(words, cc.words_per_chunk, cc.max_chars)
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -92,7 +105,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{cc.font},{cc.size},{cc.primary_color},{cc.highlight_color},{cc.outline_color},&H80000000,-1,0,0,0,100,100,0,0,1,{cc.outline},{cc.shadow},2,60,60,{cc.margin_v},1
+Style: Default,{cc.font},{cc.size},{cc.primary_color},{cc.highlight_color},{cc.outline_color},&H80000000,-1,0,0,0,100,100,0,0,1,{cc.outline},{cc.shadow},2,60,60,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -112,5 +125,8 @@ def run_stage(job: Job, cfg: Config, only: int | None = None) -> None:
         if only is not None and clip["n"] != only:
             continue
         cw = remap_words(clip_words(words, clip["start"], clip["end"]), clip.get("segments"))
-        job.path(subs_name(clip["n"])).write_text(build_ass(cw, cfg.captions, cfg.output_resolution), encoding="utf-8")
+        track = job.path(f"crop_track_{clip['n']}.json")
+        mode = json.loads(track.read_text(encoding="utf-8"))["mode"] if track.exists() else "face"
+        ass = build_ass(cw, cfg.captions, cfg.output_resolution, margin_for_layout(mode, cfg))
+        job.path(subs_name(clip["n"])).write_text(ass, encoding="utf-8")
     log.info("Subtítulos generados")

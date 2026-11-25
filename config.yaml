@@ -36,6 +36,14 @@ silences:
   pad: 0.12                     # …dejando 0.12 s de margen a cada lado
   min_segment: 0.2
 
+layout:
+  mode: auto                    # auto | face | split | screen
+  small_face: 0.06              # cara < 6% del ancho → webcam superpuesta sobre la pantalla
+  flat_screen: 0.45             # % de zonas de color plano a partir del cual se considera pantalla
+  camera_ratio: 0.4             # diseño dividido: cámara arriba 40 %, pantalla abajo 60 %
+  camera_zoom: 3.2              # recorte de la webcam = 3.2 × ancho de la cara
+  screen_height: 1.0            # recorte de pantalla = 100 % del alto (bájalo para más zoom en el código)
+
 reframe:
   sample_fps: 5
   smoothing: 0.15               # alfa de la media móvil exponencial (0-1, menor = más suave)

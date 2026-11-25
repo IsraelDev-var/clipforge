@@ -7,6 +7,8 @@ const STAGE_LABELS = {
 const STATE_LABELS = { new: "nuevo", queued: "en cola", running: "procesando", done: "listo", error: "error" };
 const LLM_LABELS = { hook: "Gancho", standalone: "Se entiende solo", value: "Valor", emotion: "Emoción", shareability: "Compartible" };
 const SIGNAL_LABELS = { hook_delay: "Arranque", pace: "Ritmo", dead_air: "Silencios", ending: "Cierre", duration: "Duración", energy: "Energía" };
+const LAYOUT_LABELS = { auto: "Automático", face: "Seguir la cara", split: "Dividido: cámara + pantalla", screen: "Solo pantalla" };
+const LAYOUT_SHORT = { face: "👤 cara", center: "▣ centrado", split: "🖥️ dividido", screen: "🖥️ pantalla" };
 const app = document.getElementById("app");
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -108,6 +110,8 @@ async function renderHome() {
   const maxS = h("input", { type: "number", min: 5, max: 180, step: 1, value: config.max });
   const faces = h("input", { type: "checkbox", checked: true });
   const silences = h("input", { type: "checkbox", checked: config.silences !== false });
+  const layout = h("select", {}, Object.entries(LAYOUT_LABELS).map(([v, l]) => h("option", { value: v }, l)));
+  layout.value = config.layout || "auto";
   const bar = h("div");
   const progress = h("div", { class: "progress", hidden: true }, bar);
   const submit = h("button", { class: "primary", type: "submit" }, "Crear clips");
@@ -119,6 +123,7 @@ async function renderHome() {
       h("label", {}, "Clips", nClips),
       h("label", {}, "Mínimo (s)", minS),
       h("label", {}, "Máximo (s)", maxS),
+      h("label", {}, "Diseño", layout),
       h("label", { class: "check" }, faces, "Seguir la cara"),
       h("label", { class: "check" }, silences, "Quitar silencios"),
     ),
@@ -135,6 +140,7 @@ async function renderHome() {
     fd.append("max_s", maxS.value);
     fd.append("faces", faces.checked);
     fd.append("silences", silences.checked);
+    fd.append("layout", layout.value);
     if (mode === "url") fd.append("url", urlInput.value.trim());
     else fd.append("file", file);
     submit.disabled = true;
@@ -286,7 +292,8 @@ function clipCard(job, c) {
         viralBadge(c.virality),
         h("span", {}, `#${c.n}`),
         h("span", {}, `${fmt(c.start)} → ${fmt(c.end)}`),
-        h("span", {}, durationText(c))),
+        h("span", {}, durationText(c)),
+        c.layout_used ? h("span", { class: "chip", title: "Diseño del clip" }, LAYOUT_SHORT[c.layout_used] || c.layout_used) : null),
       title, desc, tags,
       c.hook ? h("div", { class: "small muted" }, h("b", {}, "Gancho: "), c.hook) : null,
       c.text ? h("div", { class: "text", title: "Transcripción del clip" }, c.text) : null),
@@ -380,6 +387,8 @@ const adjStart = document.getElementById("adj-start");
 const adjEnd = document.getElementById("adj-end");
 const adjInfo = document.getElementById("adj-info");
 const adjCut = document.getElementById("adj-cut");
+const adjLayout = document.getElementById("adj-layout");
+adjLayout.append(...Object.entries(LAYOUT_LABELS).map(([v, l]) => h("option", { value: v }, l)));
 let adjCtx = null;
 let previewEnd = null;
 
@@ -395,6 +404,7 @@ function updateAdjInfo() {
 function openAdjust(job, c) {
   adjCtx = { job, clip: c };
   document.getElementById("adj-title").textContent = `Ajustar clip #${c.n}`;
+  adjLayout.value = c.layout || "auto";
   adjCut.checked = c.cut_silences ?? (c.segments ? true : job.options.silences ?? true);
   adjStart.value = c.start.toFixed(1);
   adjEnd.value = c.end.toFixed(1);
@@ -427,7 +437,7 @@ document.getElementById("adj-save").onclick = async () => {
   const { job, clip } = adjCtx;
   try {
     await api(`/api/jobs/${encodeURIComponent(job.id)}/clips/${clip.n}/render`,
-      { method: "POST", json: { start, end, cut_silences: adjCut.checked } });
+      { method: "POST", json: { start, end, cut_silences: adjCut.checked, layout: adjLayout.value } });
     dlg.close();
     toast(`Re-exportando clip #${clip.n}…`);
     renderJob(job.id);

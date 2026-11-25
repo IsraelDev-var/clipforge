@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shutil
@@ -21,6 +22,7 @@ from clipforge.config import Config, load_config
 from clipforge.job import DATA_DIR, Job, create_job, open_job
 from clipforge.pipeline import STAGES, rerender_clip, run_pipeline
 from clipforge.stages import metadata
+from clipforge.stages.reframe import LAYOUTS, track_name
 from clipforge.stages.render import clip_name
 from clipforge.stages.select import Candidate
 from clipforge.utils.timing import flatten_words
@@ -71,6 +73,7 @@ class ClipTimes(BaseModel):
     start: float
     end: float
     cut_silences: bool | None = None
+    layout: str | None = None
 
 
 class ResumeReq(BaseModel):
@@ -114,6 +117,7 @@ def create_app(data_dir: Path = DATA_DIR, config_path: Path | None = None) -> Fa
     def get_config() -> dict:
         c = cfg()
         return {"clips": c.clips, "min": c.min_seconds, "max": c.max_seconds, "silences": c.silences.enabled,
+                "layout": c.layout.mode,
                 "stages": list(STAGES)}
 
     @app.get("/api/jobs")
@@ -130,12 +134,15 @@ def create_app(data_dir: Path = DATA_DIR, config_path: Path | None = None) -> Fa
         max_s: float = Form(...),
         faces: bool = Form(True),
         silences: bool = Form(True),
+        layout: str = Form("auto"),
     ) -> dict:
         if not (1 <= clips <= 30):
             raise HTTPException(422, "El número de clips debe estar entre 1 y 30.")
         if not (0 < min_s < max_s <= 180):
             raise HTTPException(422, "Duraciones inválidas: 0 < mínimo < máximo ≤ 180 s.")
-        opts = {"clips": clips, "min": min_s, "max": max_s, "faces": faces, "silences": silences}
+        if layout not in LAYOUTS:
+            raise HTTPException(422, "Diseño inválido.")
+        opts = {"clips": clips, "min": min_s, "max": max_s, "faces": faces, "silences": silences, "layout": layout}
         url = (url or "").strip()
         if file is not None and file.filename:
             ext = Path(file.filename).suffix.lower()
@@ -165,10 +172,12 @@ def create_app(data_dir: Path = DATA_DIR, config_path: Path | None = None) -> Fa
             words = flatten_words(job.load_json("transcript.json")) if job.exists("transcript.json") else []
             for c in job.load_json("highlights.json")["clips"]:
                 f = job.path(clip_name(c["n"]))
+                tp = job.path(track_name(c["n"]))
+                used = json.loads(tp.read_text(encoding="utf-8"))["mode"] if tp.exists() else None
                 text = " ".join(w["w"] for w in words if c["start"] <= w["s"] < c["end"])
                 out["clips"].append(c | {"file": f.name if f.exists() else None,
                                          "version": int(f.stat().st_mtime) if f.exists() else 0,
-                                         "text": text})
+                                         "text": text, "layout_used": used})
         out["has_source"] = job.exists("source.mp4")
         return out
 
@@ -192,10 +201,12 @@ def create_app(data_dir: Path = DATA_DIR, config_path: Path | None = None) -> Fa
     def rerender(job_id: str, n: int, body: ClipTimes) -> dict:
         job = get_job(job_id)
         ensure_idle(job)
+        if body.layout is not None and body.layout not in LAYOUTS:
+            raise HTTPException(422, "Diseño inválido.")
         if body.end - body.start < 1:
             raise HTTPException(422, "El clip debe durar al menos 1 segundo.")
         c = cfg()
-        worker.submit(job, lambda: rerender_clip(job, c, n, body.start, body.end, body.cut_silences))
+        worker.submit(job, lambda: rerender_clip(job, c, n, body.start, body.end, body.cut_silences, body.layout))
         return {"ok": True}
 
     @app.post("/api/jobs/{job_id}/resume", status_code=202)

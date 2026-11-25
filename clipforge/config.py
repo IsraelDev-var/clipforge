@@ -32,6 +32,19 @@ class ReframeConfig(BaseModel):
     dead_zone: float = 0.06
 
 
+class LayoutConfig(BaseModel):
+    mode: str = "auto"            # auto | face | split | screen
+    small_face: float = 0.06      # cara más estrecha que esta fracción del ancho → webcam superpuesta
+    min_face_frac: float = 0.3    # fracción mínima de muestras con cara para considerar que hay cámara
+    flat_screen: float = 0.45     # fracción de zonas planas a partir de la cual es una pantalla
+    camera_ratio: float = 0.4     # alto del panel de cámara en el diseño dividido
+    camera_zoom: float = 3.2      # ancho del recorte de cámara = N × ancho de la cara
+    screen_height: float = 1.0    # alto del recorte de pantalla / alto del video (menos = más zoom)
+    analysis_samples: int = 24
+    captions_split_y: float = 0.40   # centro de los subtítulos (fracción del alto) en diseño dividido
+    captions_screen_y: float = 0.87  # … y en «solo pantalla»
+
+
 class SilencesConfig(BaseModel):
     enabled: bool = True
     max_gap: float = 0.5      # pausas más largas que esto se recortan
@@ -56,6 +69,7 @@ class Config(BaseModel):
     captions: CaptionsConfig = Field(default_factory=CaptionsConfig)
     reframe: ReframeConfig = Field(default_factory=ReframeConfig)
     silences: SilencesConfig = Field(default_factory=SilencesConfig)
+    layout: LayoutConfig = Field(default_factory=LayoutConfig)
 
 
 class Secrets(BaseSettings):
