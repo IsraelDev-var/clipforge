@@ -19,10 +19,13 @@ dependencies = [
     "pydantic>=2",
     "pydantic-settings>=2",
     "pyyaml",
+    "fastapi>=0.110",
+    "uvicorn[standard]",
+    "python-multipart",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "httpx"]
 
 [project.scripts]
 clipforge = "clipforge.cli:app"
@@ -31,7 +34,7 @@ clipforge = "clipforge.cli:app"
 include = ["clipforge*"]
 
 [tool.setuptools.package-data]
-clipforge = ["prompts/*.txt"]
+clipforge = ["prompts/*.txt", "web/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

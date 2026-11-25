@@ -35,7 +35,8 @@ def _load_model(cfg: Config):
     try:
         return WhisperModel(cfg.whisper_model, device=device, compute_type=compute)
     except Exception as exc:  # noqa: BLE001
-        raise ClipForgeError(f"No se pudo cargar el modelo Whisper «{cfg.whisper_model}»: {exc}") from exc
+        raise ClipForgeError(f"No se pudo cargar el modelo Whisper «{cfg.whisper_model}»: {exc}\n"
+                             "La primera vez se descarga de huggingface.co: revisa tu conexión.") from exc
 
 
 def run_stage(job: Job, cfg: Config) -> None:

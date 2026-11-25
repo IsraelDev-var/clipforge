@@ -42,6 +42,15 @@ class Job:
     def save_meta(self) -> None:
         self.save_json("job.json", self.meta)
 
+    def set_status(self, state: str, stage: str | None = None, message: str = "") -> None:
+        """Estado visible desde la web: queued | running | done | error."""
+        self.meta["status"] = {"state": state, "stage": stage, "message": message, "updated": time.time()}
+        self.save_meta()
+
+    @property
+    def status(self) -> dict[str, Any]:
+        return self.meta.get("status") or {"state": "new", "stage": None, "message": ""}
+
     @property
     def options(self) -> dict[str, Any]:
         return self.meta.setdefault("options", {})

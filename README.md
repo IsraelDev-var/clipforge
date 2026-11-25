@@ -31,6 +31,15 @@ clipforge render <job_id> --clip 3 --start 120.5 --end 165.0   # ajuste manual
 clipforge jobs                                 # lista trabajos
 ```
 
+### Interfaz web
+
+```bash
+clipforge web                    # http://127.0.0.1:8000
+clipforge web --host 0.0.0.0     # accesible desde otros dispositivos de tu red
+```
+
+Pega un enlace o sube un archivo y verás el progreso por etapas. Cuando termine, cada clip aparece con su video, puntuación y transcripción. Desde ahí puedes editar el título, la descripción y los hashtags, copiarlos, ajustar el inicio y el fin sobre el video original y re-exportar. Puedes descargar cada MP4 o todos en un `.zip`. Los trabajos se procesan de uno en uno, en cola. La interfaz no tiene autenticación, así que no la expongas a internet.
+
 Etapas para `--from`: `ingest, audio, transcribe, select, reframe, captions, render, metadata`.
 
 Salida en `data/<job_id>/`: `clip_<n>.mp4` (1080×1920) y `clips.json`.

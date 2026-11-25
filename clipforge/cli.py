@@ -114,6 +114,24 @@ def render(
     _guard(lambda: rerender_clip(open_job(job_id, data_dir), load_config(config), clip, start, end))
 
 
+@app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", "--host", help="0.0.0.0 para abrirla en tu red local"),
+    port: int = typer.Option(8000, "--port"),
+    config: Optional[Path] = ConfigOpt,
+    data_dir: Path = DataOpt,
+    verbose: bool = VerboseOpt,
+) -> None:
+    """Abre la interfaz web en el navegador."""
+    _setup(verbose)
+    import uvicorn
+
+    from clipforge.web.app import create_app
+
+    typer.secho(f"ClipForge web en http://{host}:{port}", fg=typer.colors.CYAN)
+    uvicorn.run(create_app(data_dir, config), host=host, port=port, log_level="warning")
+
+
 @app.command("jobs")
 def list_jobs(data_dir: Path = DataOpt) -> None:
     """Lista los trabajos existentes."""

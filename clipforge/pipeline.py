@@ -28,6 +28,18 @@ STAGES: dict[str, ModuleType] = {
 _PER_CLIP = ("reframe", "captions", "render", "metadata")
 
 
+def _tracked(job: Job, stage: str | None, fn, *args) -> None:
+    """Ejecuta `fn` registrando el estado en job.json; los errores quedan guardados para la web."""
+    try:
+        fn(*args)
+    except ClipForgeError as exc:
+        job.set_status("error", stage, str(exc))
+        raise
+    except Exception as exc:
+        job.set_status("error", stage, f"Error inesperado: {exc}")
+        raise
+
+
 def run_pipeline(job: Job, cfg: Config, from_stage: str | None = None) -> None:
     """Ejecuta las etapas en orden. Salta las ya hechas, salvo `from_stage` y las siguientes."""
     require_ffmpeg()
@@ -42,11 +54,13 @@ def run_pipeline(job: Job, cfg: Config, from_stage: str | None = None) -> None:
             log.info("[%d/%d] %s: ya hecho, se omite", i + 1, len(names), name)
             continue
         log.info("[%d/%d] %s…", i + 1, len(names), name)
+        job.set_status("running", name)
         t0 = time.time()
-        stage.run_stage(job, cfg)
+        _tracked(job, name, stage.run_stage, job, cfg)
         log.info("[%d/%d] %s listo (%.1f s)", i + 1, len(names), name, time.time() - t0)
         if name == "select":
             force_from = min(force_from, names.index("reframe"))  # nuevos clips → rehacer el resto
+    job.set_status("done")
     log.info("Trabajo %s completado en %.0f s → %s", job.id, time.time() - t_total, job.dir)
 
 
@@ -58,14 +72,16 @@ def rerender_clip(job: Job, cfg: Config, n: int, start: float | None, end: float
     if clip is None:
         raise ClipForgeError(f"El clip {n} no existe. Clips disponibles: {[c['n'] for c in data['clips']]}")
     duration = job.meta.get("video", {}).get("duration")
-    clip["start"] = clip["start"] if start is None else max(0.0, start)
-    clip["end"] = clip["end"] if end is None else (min(end, duration) if duration else end)
-    if clip["end"] <= clip["start"]:
+    new_start = clip["start"] if start is None else max(0.0, start)
+    new_end = clip["end"] if end is None else (min(end, duration) if duration else end)
+    if new_end <= new_start:
         raise ClipForgeError("El final del clip debe ser posterior al inicio.")
-    clip["duration"] = round(clip["end"] - clip["start"], 3)
+    clip.update(start=round(new_start, 3), end=round(new_end, 3), duration=round(new_end - new_start, 3))
     job.save_json("highlights.json", data)
     for name in _PER_CLIP[:-1]:
         log.info("%s (clip %d)…", name, n)
-        STAGES[name].run_stage(job, cfg, only=n)
-    metadata.run_stage(job, cfg)
+        job.set_status("running", name, f"Re-exportando clip {n}")
+        _tracked(job, name, STAGES[name].run_stage, job, cfg, n)
+    _tracked(job, "metadata", metadata.run_stage, job, cfg)
+    job.set_status("done")
     log.info("Clip %d listo: %s", n, job.path(render.clip_name(n)))

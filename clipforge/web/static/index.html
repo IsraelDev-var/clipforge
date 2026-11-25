@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipForge</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#/" class="brand"><span class="logo">▮</span> ClipForge</a>
+    <span class="tag">clips verticales con subtítulos</span>
+  </header>
+  <main id="app"></main>
+
+  <dialog id="adjust">
+    <form method="dialog" class="adjust">
+      <header>
+        <h2 id="adj-title">Ajustar clip</h2>
+        <button class="icon" value="cancel" aria-label="Cerrar">✕</button>
+      </header>
+      <video id="adj-video" controls preload="metadata"></video>
+      <div class="adj-grid">
+        <label>Inicio
+          <div class="nudge">
+            <button type="button" data-k="start" data-d="-0.5">−0.5</button>
+            <input id="adj-start" type="number" step="0.1" min="0">
+            <button type="button" data-k="start" data-d="0.5">+0.5</button>
+          </div>
+          <button type="button" id="adj-set-start" class="ghost">Inicio = posición actual</button>
+        </label>
+        <label>Final
+          <div class="nudge">
+            <button type="button" data-k="end" data-d="-0.5">−0.5</button>
+            <input id="adj-end" type="number" step="0.1" min="0">
+            <button type="button" data-k="end" data-d="0.5">+0.5</button>
+          </div>
+          <button type="button" id="adj-set-end" class="ghost">Final = posición actual</button>
+        </label>
+      </div>
+      <p class="muted" id="adj-info"></p>
+      <footer>
+        <button type="button" id="adj-preview" class="ghost">▶ Previsualizar rango</button>
+        <button type="button" id="adj-save" class="primary">Re-exportar clip</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
