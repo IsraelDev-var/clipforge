@@ -1,11 +1,17 @@
 "use strict";
 
 const STAGE_LABELS = {
-  ingest: "Descarga", audio: "Audio", transcribe: "Transcripción", select: "Selección IA",
+  ingest: "Descarga", audio: "Audio", transcribe: "Transcripción", select: "Selección IA", virality: "Viralidad",
   reframe: "Encuadre", captions: "Subtítulos", render: "Render", metadata: "Metadatos",
 };
 const STATE_LABELS = { new: "nuevo", queued: "en cola", running: "procesando", done: "listo", error: "error" };
+const LLM_LABELS = { hook: "Gancho", standalone: "Se entiende solo", value: "Valor", emotion: "Emoción", shareability: "Compartible" };
+const SIGNAL_LABELS = { hook_delay: "Arranque", pace: "Ritmo", dead_air: "Silencios", ending: "Cierre", duration: "Duración", energy: "Energía" };
 const app = document.getElementById("app");
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
 let pollTimer = null;
 let config = null;
 
@@ -206,6 +212,7 @@ async function renderJob(id) {
         job.video ? ` · ${job.video.width}×${job.video.height} · ${fmt(job.video.duration)}` : "")),
     h("div", { class: "actions" },
       badge(st),
+      job.clips.length > 1 ? sortSelect(job.id) : null,
       job.clips.some((c) => c.file) ? h("a", { class: "btn", href: `${base}/zip` }, "⬇ Descargar todo (.zip)") : null,
       !active && st.state !== "done" ? h("button", { class: "ghost", onclick: () => resume(job.id) }, "↻ Reanudar") : null,
       !active && job.clips.length ? h("button", { class: "ghost", onclick: () => reselect(job.id) }, "✦ Volver a elegir clips") : null,
@@ -214,7 +221,7 @@ async function renderJob(id) {
 
   const stages = config?.stages || Object.keys(STAGE_LABELS);
   const idx = stages.indexOf(st.stage);
-  const steps = h("div", { class: "steps" }, stages.map((s, i) => {
+  const steps = h("div", { class: "steps", style: `--n:${stages.length}` }, stages.map((s, i) => {
     let cls = "";
     if (st.state === "done") cls = "done";
     else if (idx >= 0 && i < idx) cls = "done";
@@ -230,10 +237,13 @@ async function renderJob(id) {
 
   // Solo se reconstruyen las tarjetas si cambian los clips: así el sondeo no reinicia
   // los videos que estás viendo ni borra lo que estás escribiendo.
-  const sig = job.id + "|" + job.clips.map((c) => `${c.n}:${c.version}:${c.start}:${c.end}`).join(",");
+  const order = store.get("cf-order") || "time";
+  const sorted = [...job.clips].sort((a, b) =>
+    order === "virality" ? (b.virality?.score ?? 0) - (a.virality?.score ?? 0) : a.start - b.start);
+  const sig = job.id + "|" + order + "|" + sorted.map((c) => `${c.n}:${c.version}:${c.start}:${c.end}:${c.virality?.score}`).join(",");
   let clips = app.querySelector(".clips");
   if (!clips || clips.dataset.sig !== sig) {
-    clips = job.clips.length ? h("div", { class: "clips", "data-sig": sig }, job.clips.map((c) => clipCard(job, c))) : null;
+    clips = job.clips.length ? h("div", { class: "clips", "data-sig": sig }, sorted.map((c) => clipCard(job, c))) : null;
   }
   if (clips) clips.querySelectorAll("[data-lock]").forEach((b) => (b.disabled = active));
 
@@ -270,19 +280,68 @@ function clipCard(job, c) {
     media,
     h("div", { class: "fields" },
       h("div", { class: "clip-meta" },
-        h("span", { class: "score", title: "Puntuación de la IA" }, c.score ?? "–"),
+        viralBadge(c.virality),
         h("span", {}, `#${c.n}`),
         h("span", {}, `${fmt(c.start)} → ${fmt(c.end)}`),
         h("span", {}, `${(c.end - c.start).toFixed(1)} s`)),
       title, desc, tags,
       c.hook ? h("div", { class: "small muted" }, h("b", {}, "Gancho: "), c.hook) : null,
       c.text ? h("div", { class: "text", title: "Transcripción del clip" }, c.text) : null),
+    c.virality ? viralDetails(c.virality) : null,
     h("div", { class: "btns" },
       h("button", { class: "ghost", onclick: save, "data-lock": true }, "Guardar texto"),
       h("button", { class: "ghost", onclick: copy }, "Copiar texto"),
       job.has_source ? h("button", { class: "ghost", onclick: () => openAdjust(job, c), "data-lock": true }, "✂ Ajustar inicio/fin") : null,
       c.file ? h("a", { class: "btn", href: `${base}/files/${c.file}?download=1` }, "⬇ MP4") : null),
   );
+}
+
+function sortSelect(id) {
+  const sel = h("select", { "aria-label": "Ordenar clips" },
+    h("option", { value: "time" }, "Orden cronológico"),
+    h("option", { value: "virality" }, "Más virales primero"));
+  sel.value = store.get("cf-order") || "time";
+  sel.onchange = () => { store.set("cf-order", sel.value); renderJob(id); };
+  return sel;
+}
+
+function viralBadge(v) {
+  if (!v) return h("span", { class: "viral none", title: "Sin puntuación de viralidad" }, "–");
+  return h("span", { class: `viral ${v.grade}`, title: `Viralidad ${v.score}/100 (${v.grade})` }, "🔥 ", String(v.score));
+}
+
+function bar(label, frac, valueText) {
+  const pct = Math.round(Math.max(0, Math.min(1, frac)) * 100);
+  return h("div", { class: "bar" },
+    h("span", {}, label),
+    h("div", { class: "track" }, h("div", { class: pct >= 70 ? "hi" : pct >= 45 ? "mid" : "lo", style: `width:${pct}%` })),
+    h("span", { class: "val" }, valueText));
+}
+
+function signalText(k, s) {
+  switch (k) {
+    case "hook_delay": return `${s.hook_delay.toFixed(1)} s`;
+    case "pace": return `${s.pace.toFixed(1)} p/s`;
+    case "dead_air": return `${Math.round(s.dead_air * 100)} %`;
+    case "ending": return s.ends_sentence ? "sí" : "no";
+    case "energy": return s.energy.toFixed(2);
+    default: return "";
+  }
+}
+
+function viralDetails(v) {
+  const llm = v.llm
+    ? Object.entries(LLM_LABELS).map(([k, l]) => bar(l, v.llm[k] / 10, `${v.llm[k]}/10`))
+    : [h("p", { class: "small muted" }, "Sin criterios de la IA (trabajo anterior): se usa su puntuación general.")];
+  const sig = Object.entries(SIGNAL_LABELS).map(([k, l]) =>
+    bar(l, v.subscores[k], k === "duration" ? "" : signalText(k, v.signals)));
+  return h("details", { class: "viral-details" },
+    h("summary", {}, `Viralidad ${v.score}/100 · ${v.grade}`, v.tips.length ? ` · ${v.tips.length} consejo${v.tips.length > 1 ? "s" : ""}` : ""),
+    h("div", { class: "small muted" }, `IA ${v.llm_score} × 70 % + señales ${v.signals_score} × 30 %`,
+      v.signals.question_hook ? " + 3 por pregunta en el gancho" : ""),
+    h("h4", {}, "Criterios de la IA"), ...llm,
+    h("h4", {}, "Señales medidas"), ...sig,
+    v.tips.length ? h("ul", { class: "tips" }, v.tips.map((t) => h("li", {}, t))) : h("p", { class: "small ok" }, "Sin puntos débiles claros."));
 }
 
 async function resume(id, fromStage = null) {

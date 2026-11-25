@@ -9,7 +9,7 @@ from types import ModuleType
 from clipforge import ClipForgeError
 from clipforge.config import Config
 from clipforge.job import Job
-from clipforge.stages import audio, captions, ingest, metadata, reframe, render, select, transcribe
+from clipforge.stages import audio, captions, ingest, metadata, reframe, render, select, transcribe, virality
 from clipforge.utils.ffmpeg import require_ffmpeg
 
 log = logging.getLogger(__name__)
@@ -19,13 +19,14 @@ STAGES: dict[str, ModuleType] = {
     "audio": audio,
     "transcribe": transcribe,
     "select": select,
+    "virality": virality,
     "reframe": reframe,
     "captions": captions,
     "render": render,
     "metadata": metadata,
 }
 # Etapas que dependen de highlights.json: si se re-selecciona hay que rehacerlas.
-_PER_CLIP = ("reframe", "captions", "render", "metadata")
+_PER_CLIP = ("virality", "reframe", "captions", "render", "metadata")
 
 
 def _tracked(job: Job, stage: str | None, fn, *args) -> None:
@@ -59,7 +60,7 @@ def run_pipeline(job: Job, cfg: Config, from_stage: str | None = None) -> None:
         _tracked(job, name, stage.run_stage, job, cfg)
         log.info("[%d/%d] %s listo (%.1f s)", i + 1, len(names), name, time.time() - t0)
         if name == "select":
-            force_from = min(force_from, names.index("reframe"))  # nuevos clips → rehacer el resto
+            force_from = min(force_from, names.index("virality"))  # nuevos clips → rehacer el resto
     job.set_status("done")
     log.info("Trabajo %s completado en %.0f s → %s", job.id, time.time() - t_total, job.dir)
 

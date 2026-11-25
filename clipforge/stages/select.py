@@ -22,6 +22,24 @@ SENTENCE_END = (".", "?", "!", "…")
 
 # ---------- Esquema ----------
 
+CRITERIA = ("hook", "standalone", "value", "emotion", "shareability")
+
+
+class ViralityLLM(BaseModel):
+    """Valoración 1-10 de la IA para cada criterio de viralidad."""
+
+    hook: int = 5
+    standalone: int = 5
+    value: int = 5
+    emotion: int = 5
+    shareability: int = 5
+
+    @field_validator(*CRITERIA, mode="before")
+    @classmethod
+    def _clamp10(cls, v: Any) -> int:
+        return max(1, min(10, int(round(float(v)))))
+
+
 class Candidate(BaseModel):
     start: float
     end: float
@@ -31,6 +49,7 @@ class Candidate(BaseModel):
     description: str = ""
     hashtags: list[str] = Field(default_factory=list)
     reason: str = ""
+    virality: ViralityLLM | None = None
 
     @field_validator("score", mode="before")
     @classmethod
@@ -60,8 +79,11 @@ CLIPS_SCHEMA = {
         "type": "object",
         "properties": {"start": {"type": "number"}, "end": {"type": "number"}, "score": {"type": "integer"},
                        "hook": _STR, "title": _STR, "description": _STR,
-                       "hashtags": {"type": "array", "items": _STR}, "reason": _STR},
-        "required": ["start", "end", "score", "hook", "title", "description", "hashtags", "reason"],
+                       "hashtags": {"type": "array", "items": _STR}, "reason": _STR,
+                       "virality": {"type": "object",
+                                    "properties": {k: {"type": "integer"} for k in CRITERIA},
+                                    "required": list(CRITERIA), "additionalProperties": False}},
+        "required": ["start", "end", "score", "hook", "title", "description", "hashtags", "reason", "virality"],
         "additionalProperties": False,
     }}},
     "required": ["clips"],

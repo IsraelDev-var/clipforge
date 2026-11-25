@@ -10,6 +10,13 @@ Criterios:
 - Empezar y terminar en límites de frase (nunca a mitad de palabra).
 - No solapar fragmentos entre sí.
 
+Para cada fragmento puntúa del 1 al 10 su potencial viral en "virality" (sé exigente, 10 es excepcional):
+- hook: fuerza del gancho en los primeros 3 segundos.
+- standalone: se entiende sin contexto y tiene cierre.
+- value: aprendizaje o utilidad práctica para quien lo ve.
+- emotion: humor, sorpresa, frustración o reacción genuina.
+- shareability: ganas de comentarlo, guardarlo o enviarlo a alguien.
+
 Usa como "start" y "end" los tiempos en segundos de la transcripción (los números entre corchetes).
 El título debe tener como máximo 60 caracteres. Los hashtags sin espacios y empezando por #.
 Si un bloque no tiene buenos momentos, devuelve menos clips o ninguno.
@@ -17,4 +24,5 @@ Si un bloque no tiene buenos momentos, devuelve menos clips o ninguno.
 Devuelve SOLO JSON válido con este esquema:
 {"clips": [{"start": float, "end": float, "score": int (1-100),
   "hook": str, "title": str (máx 60 caracteres),
-  "description": str, "hashtags": [str], "reason": str}]}
+  "description": str, "hashtags": [str], "reason": str,
+  "virality": {"hook": int, "standalone": int, "value": int, "emotion": int, "shareability": int}}]}
