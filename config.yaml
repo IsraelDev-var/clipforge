@@ -30,6 +30,12 @@ captions:
   uppercase: true
   margin_v: 620                 # distancia al borde inferior (tercio inferior-medio)
 
+silences:
+  enabled: true                 # quitar pausas dentro de cada clip
+  max_gap: 0.5                  # pausas de más de 0.5 s se recortan…
+  pad: 0.12                     # …dejando 0.12 s de margen a cada lado
+  min_segment: 0.2
+
 reframe:
   sample_fps: 5
   smoothing: 0.15               # alfa de la media móvil exponencial (0-1, menor = más suave)

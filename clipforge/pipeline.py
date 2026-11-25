@@ -9,7 +9,8 @@ from types import ModuleType
 from clipforge import ClipForgeError
 from clipforge.config import Config
 from clipforge.job import Job
-from clipforge.stages import audio, captions, ingest, metadata, reframe, render, select, transcribe, virality
+from clipforge.stages import (audio, captions, ingest, metadata, reframe, render, select, silences, transcribe,
+                              virality)
 from clipforge.utils.ffmpeg import require_ffmpeg
 
 log = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ STAGES: dict[str, ModuleType] = {
     "audio": audio,
     "transcribe": transcribe,
     "select": select,
+    "silences": silences,
     "virality": virality,
     "reframe": reframe,
     "captions": captions,
@@ -26,7 +28,7 @@ STAGES: dict[str, ModuleType] = {
     "metadata": metadata,
 }
 # Etapas que dependen de highlights.json: si se re-selecciona hay que rehacerlas.
-_PER_CLIP = ("virality", "reframe", "captions", "render", "metadata")
+_PER_CLIP = ("silences", "virality", "reframe", "captions", "render", "metadata")
 
 
 def _tracked(job: Job, stage: str | None, fn, *args) -> None:
@@ -60,12 +62,13 @@ def run_pipeline(job: Job, cfg: Config, from_stage: str | None = None) -> None:
         _tracked(job, name, stage.run_stage, job, cfg)
         log.info("[%d/%d] %s listo (%.1f s)", i + 1, len(names), name, time.time() - t0)
         if name == "select":
-            force_from = min(force_from, names.index("virality"))  # nuevos clips → rehacer el resto
+            force_from = min(force_from, names.index("silences"))  # nuevos clips → rehacer el resto
     job.set_status("done")
     log.info("Trabajo %s completado en %.0f s → %s", job.id, time.time() - t_total, job.dir)
 
 
-def rerender_clip(job: Job, cfg: Config, n: int, start: float | None, end: float | None) -> None:
+def rerender_clip(job: Job, cfg: Config, n: int, start: float | None, end: float | None,
+                  cut_silences: bool | None = None) -> None:
     """Ajuste manual de un clip: actualiza inicio/fin y rehace reframe, subtítulos, render y metadata."""
     require_ffmpeg()
     data = job.load_json("highlights.json")
@@ -78,6 +81,8 @@ def rerender_clip(job: Job, cfg: Config, n: int, start: float | None, end: float
     if new_end <= new_start:
         raise ClipForgeError("El final del clip debe ser posterior al inicio.")
     clip.update(start=round(new_start, 3), end=round(new_end, 3), duration=round(new_end - new_start, 3))
+    if cut_silences is not None:
+        clip["cut_silences"] = cut_silences
     job.save_json("highlights.json", data)
     for name in _PER_CLIP[:-1]:
         log.info("%s (clip %d)…", name, n)

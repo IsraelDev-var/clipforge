@@ -70,6 +70,7 @@ class ClipText(BaseModel):
 class ClipTimes(BaseModel):
     start: float
     end: float
+    cut_silences: bool | None = None
 
 
 class ResumeReq(BaseModel):
@@ -112,7 +113,8 @@ def create_app(data_dir: Path = DATA_DIR, config_path: Path | None = None) -> Fa
     @app.get("/api/config")
     def get_config() -> dict:
         c = cfg()
-        return {"clips": c.clips, "min": c.min_seconds, "max": c.max_seconds, "stages": list(STAGES)}
+        return {"clips": c.clips, "min": c.min_seconds, "max": c.max_seconds, "silences": c.silences.enabled,
+                "stages": list(STAGES)}
 
     @app.get("/api/jobs")
     def list_jobs() -> list[dict]:
@@ -127,12 +129,13 @@ def create_app(data_dir: Path = DATA_DIR, config_path: Path | None = None) -> Fa
         min_s: float = Form(...),
         max_s: float = Form(...),
         faces: bool = Form(True),
+        silences: bool = Form(True),
     ) -> dict:
         if not (1 <= clips <= 30):
             raise HTTPException(422, "El número de clips debe estar entre 1 y 30.")
         if not (0 < min_s < max_s <= 180):
             raise HTTPException(422, "Duraciones inválidas: 0 < mínimo < máximo ≤ 180 s.")
-        opts = {"clips": clips, "min": min_s, "max": max_s, "faces": faces}
+        opts = {"clips": clips, "min": min_s, "max": max_s, "faces": faces, "silences": silences}
         url = (url or "").strip()
         if file is not None and file.filename:
             ext = Path(file.filename).suffix.lower()
@@ -192,7 +195,7 @@ def create_app(data_dir: Path = DATA_DIR, config_path: Path | None = None) -> Fa
         if body.end - body.start < 1:
             raise HTTPException(422, "El clip debe durar al menos 1 segundo.")
         c = cfg()
-        worker.submit(job, lambda: rerender_clip(job, c, n, body.start, body.end))
+        worker.submit(job, lambda: rerender_clip(job, c, n, body.start, body.end, body.cut_silences))
         return {"ok": True}
 
     @app.post("/api/jobs/{job_id}/resume", status_code=202)

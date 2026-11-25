@@ -12,7 +12,7 @@ from clipforge.web import app as webapp
 def env(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(webapp, "run_pipeline", lambda job, cfg, frm=None: calls.append(("run", job.id, frm)))
-    monkeypatch.setattr(webapp, "rerender_clip", lambda job, cfg, n, s, e: calls.append(("render", n, s, e)))
+    monkeypatch.setattr(webapp, "rerender_clip", lambda job, cfg, n, s, e, cut=None: calls.append(("render", n, s, e)))
     job = create_job("https://www.youtube.com/watch?v=abc123", {"clips": 2, "min": 20, "max": 40}, tmp_path, "demo")
     words = [{"w": "hola", "s": 1.0, "e": 1.4}, {"w": "mundo.", "s": 1.5, "e": 2.0}]
     job.save_json("transcript.json", {"segments": [{"id": 0, "start": 1, "end": 2, "text": "", "words": words}]})

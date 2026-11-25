@@ -32,6 +32,13 @@ class ReframeConfig(BaseModel):
     dead_zone: float = 0.06
 
 
+class SilencesConfig(BaseModel):
+    enabled: bool = True
+    max_gap: float = 0.5      # pausas más largas que esto se recortan
+    pad: float = 0.12         # margen que se deja a cada lado del corte
+    min_segment: float = 0.2  # tramos más cortos se unen al anterior
+
+
 class Config(BaseModel):
     whisper_model: str = "medium"
     whisper_device: str = "auto"
@@ -48,6 +55,7 @@ class Config(BaseModel):
     loudnorm: bool = False
     captions: CaptionsConfig = Field(default_factory=CaptionsConfig)
     reframe: ReframeConfig = Field(default_factory=ReframeConfig)
+    silences: SilencesConfig = Field(default_factory=SilencesConfig)
 
 
 class Secrets(BaseSettings):

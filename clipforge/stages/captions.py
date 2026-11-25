@@ -7,6 +7,7 @@ from typing import Sequence
 
 from clipforge.config import CaptionsConfig, Config
 from clipforge.job import Job
+from clipforge.stages.silences import remap_words
 from clipforge.utils.timing import Word, ass_time, flatten_words
 
 log = logging.getLogger(__name__)
@@ -110,6 +111,6 @@ def run_stage(job: Job, cfg: Config, only: int | None = None) -> None:
     for clip in job.load_json("highlights.json")["clips"]:
         if only is not None and clip["n"] != only:
             continue
-        cw = clip_words(words, clip["start"], clip["end"])
+        cw = remap_words(clip_words(words, clip["start"], clip["end"]), clip.get("segments"))
         job.path(subs_name(clip["n"])).write_text(build_ass(cw, cfg.captions, cfg.output_resolution), encoding="utf-8")
     log.info("Subtítulos generados")

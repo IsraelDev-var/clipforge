@@ -1,7 +1,7 @@
 "use strict";
 
 const STAGE_LABELS = {
-  ingest: "Descarga", audio: "Audio", transcribe: "Transcripción", select: "Selección IA", virality: "Viralidad",
+  ingest: "Descarga", audio: "Audio", transcribe: "Transcripción", select: "Selección IA", silences: "Silencios", virality: "Viralidad",
   reframe: "Encuadre", captions: "Subtítulos", render: "Render", metadata: "Metadatos",
 };
 const STATE_LABELS = { new: "nuevo", queued: "en cola", running: "procesando", done: "listo", error: "error" };
@@ -107,6 +107,7 @@ async function renderHome() {
   const minS = h("input", { type: "number", min: 5, max: 180, step: 1, value: config.min });
   const maxS = h("input", { type: "number", min: 5, max: 180, step: 1, value: config.max });
   const faces = h("input", { type: "checkbox", checked: true });
+  const silences = h("input", { type: "checkbox", checked: config.silences !== false });
   const bar = h("div");
   const progress = h("div", { class: "progress", hidden: true }, bar);
   const submit = h("button", { class: "primary", type: "submit" }, "Crear clips");
@@ -119,6 +120,7 @@ async function renderHome() {
       h("label", {}, "Mínimo (s)", minS),
       h("label", {}, "Máximo (s)", maxS),
       h("label", { class: "check" }, faces, "Seguir la cara"),
+      h("label", { class: "check" }, silences, "Quitar silencios"),
     ),
     progress,
     h("div", {}, submit),
@@ -132,6 +134,7 @@ async function renderHome() {
     fd.append("min_s", minS.value);
     fd.append("max_s", maxS.value);
     fd.append("faces", faces.checked);
+    fd.append("silences", silences.checked);
     if (mode === "url") fd.append("url", urlInput.value.trim());
     else fd.append("file", file);
     submit.disabled = true;
@@ -283,7 +286,7 @@ function clipCard(job, c) {
         viralBadge(c.virality),
         h("span", {}, `#${c.n}`),
         h("span", {}, `${fmt(c.start)} → ${fmt(c.end)}`),
-        h("span", {}, `${(c.end - c.start).toFixed(1)} s`)),
+        h("span", {}, durationText(c))),
       title, desc, tags,
       c.hook ? h("div", { class: "small muted" }, h("b", {}, "Gancho: "), c.hook) : null,
       c.text ? h("div", { class: "text", title: "Transcripción del clip" }, c.text) : null),
@@ -294,6 +297,12 @@ function clipCard(job, c) {
       job.has_source ? h("button", { class: "ghost", onclick: () => openAdjust(job, c), "data-lock": true }, "✂ Ajustar inicio/fin") : null,
       c.file ? h("a", { class: "btn", href: `${base}/files/${c.file}?download=1` }, "⬇ MP4") : null),
   );
+}
+
+function durationText(c) {
+  const src = c.end - c.start, out = c.edited_duration ?? src;
+  const cut = src - out;
+  return cut >= 0.1 ? `${out.toFixed(1)} s (−${cut.toFixed(1)} s de silencios)` : `${src.toFixed(1)} s`;
 }
 
 function sortSelect(id) {
@@ -370,6 +379,7 @@ const adjVideo = document.getElementById("adj-video");
 const adjStart = document.getElementById("adj-start");
 const adjEnd = document.getElementById("adj-end");
 const adjInfo = document.getElementById("adj-info");
+const adjCut = document.getElementById("adj-cut");
 let adjCtx = null;
 let previewEnd = null;
 
@@ -378,12 +388,14 @@ function updateAdjInfo() {
   const { min, max } = adjCtx.job.options;
   const d = e - s;
   adjInfo.textContent = `${fmt(s)} → ${fmt(e)} · duración ${d.toFixed(1)} s` +
+    (adjCut.checked ? " antes de quitar silencios" : "") +
     (d < min || d > max ? ` (fuera del rango configurado ${min}–${max} s)` : "");
 }
 
 function openAdjust(job, c) {
   adjCtx = { job, clip: c };
   document.getElementById("adj-title").textContent = `Ajustar clip #${c.n}`;
+  adjCut.checked = c.cut_silences ?? (c.segments ? true : job.options.silences ?? true);
   adjStart.value = c.start.toFixed(1);
   adjEnd.value = c.end.toFixed(1);
   adjVideo.src = `/api/jobs/${encodeURIComponent(job.id)}/files/source.mp4#t=${c.start}`;
@@ -392,7 +404,7 @@ function openAdjust(job, c) {
 }
 
 dlg.addEventListener("close", () => { adjVideo.pause(); adjVideo.removeAttribute("src"); adjVideo.load(); previewEnd = null; });
-adjStart.oninput = adjEnd.oninput = updateAdjInfo;
+adjStart.oninput = adjEnd.oninput = adjCut.onchange = updateAdjInfo;
 dlg.querySelectorAll(".nudge button").forEach((b) => (b.onclick = () => {
   const input = b.dataset.k === "start" ? adjStart : adjEnd;
   input.value = Math.max(0, +input.value + +b.dataset.d).toFixed(1);
@@ -414,7 +426,8 @@ document.getElementById("adj-save").onclick = async () => {
   if (!(end > start)) return toast("El final debe ser posterior al inicio.", true);
   const { job, clip } = adjCtx;
   try {
-    await api(`/api/jobs/${encodeURIComponent(job.id)}/clips/${clip.n}/render`, { method: "POST", json: { start, end } });
+    await api(`/api/jobs/${encodeURIComponent(job.id)}/clips/${clip.n}/render`,
+      { method: "POST", json: { start, end, cut_silences: adjCut.checked } });
     dlg.close();
     toast(`Re-exportando clip #${clip.n}…`);
     renderJob(job.id);

@@ -35,6 +35,15 @@ def crop_commands(points: list[dict], duration: float, fps: float) -> str:
     return "\n".join(lines) + "\n"
 
 
+def select_expr(segments: list | None, duration: float) -> str | None:
+    """Expresión para los filtros `select`/`aselect` que conserva solo los tramos con voz."""
+    if not segments:
+        return None
+    if len(segments) == 1 and segments[0][0] <= 0.001 and segments[0][1] >= duration - 0.001:
+        return None  # no hay nada que recortar
+    return "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in segments)
+
+
 def render_clip(job: Job, cfg: Config, clip: dict) -> Path:
     n = clip["n"]
     duration = clip["end"] - clip["start"]
@@ -48,6 +57,14 @@ def render_clip(job: Job, cfg: Config, clip: dict) -> Path:
         job.path(f"crop_cmds_{n}.txt").write_text(cmds, encoding="utf-8")
         vf.append(f"sendcmd=f=crop_cmds_{n}.txt")
     vf.append(f"crop=w={track['width']}:h={track['height']}:x={track['points'][0]['x']}:y={track['y']}")
+    # El recorte sigue la cara con los tiempos originales; después se quitan los silencios
+    # (antes de escalar, para no procesar fotogramas descartados) y se renumeran los tiempos.
+    # Los subtítulos ya vienen ajustados al clip recortado.
+    keep = select_expr(clip.get("segments"), duration)
+    af = []
+    if keep:
+        vf.append(f"select='{keep}',setpts=N/FRAME_RATE/TB")
+        af.append(f"aselect='{keep}',asetpts=N/SR/TB")
     vf.append(f"scale={ow}:{oh}:flags=lanczos,setsar=1")
     if job.exists(subs_name(n)):
         ass = f"ass={subs_name(n)}"
@@ -62,7 +79,9 @@ def render_clip(job: Job, cfg: Config, clip: dict) -> Path:
            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart"]
     if cfg.loudnorm:
-        cmd += ["-af", "loudnorm=I=-14:TP=-1.5:LRA=11"]
+        af.append("loudnorm=I=-14:TP=-1.5:LRA=11")
+    if af:
+        cmd += ["-af", ",".join(af)]
     run(cmd + [tmp], cwd=job.dir)  # cwd = carpeta del job: evita escapar rutas en los filtros
     out = job.path(clip_name(n))
     job.path(tmp).replace(out)

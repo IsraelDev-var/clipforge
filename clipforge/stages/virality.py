@@ -103,9 +103,12 @@ def tips(sig: dict[str, float], sub: dict[str, float], llm: dict[str, int] | Non
     return out
 
 
-def compute(clip: dict, words: Sequence[Word], energy: float) -> dict:
-    """Puntuación final 0-100 con desglose y consejos. `words` relativas al clip."""
-    duration = clip["end"] - clip["start"]
+def compute(clip: dict, words: Sequence[Word], energy: float, duration: float | None = None) -> dict:
+    """Puntuación final 0-100 con desglose y consejos.
+
+    `words` relativas al clip final (ya sin silencios, si se recortaron) y `duration` la del clip final.
+    """
+    duration = duration if duration is not None else clip["end"] - clip["start"]
     sig = speech_signals(words, duration) | {"energy": energy}
     sub = signal_subscores(sig, duration)
     signals_score = 100 * sum(sub[k] * w for k, w in SIGNAL_WEIGHTS.items())
@@ -150,6 +153,7 @@ def done(job: Job) -> bool:
 
 def run_stage(job: Job, cfg: Config, only: int | None = None) -> None:
     from clipforge.stages.captions import clip_words
+    from clipforge.stages.silences import remap_words
 
     data = job.load_json("highlights.json")
     words = flatten_words(job.load_json("transcript.json"))
@@ -162,6 +166,7 @@ def run_stage(job: Job, cfg: Config, only: int | None = None) -> None:
             v = clip.get("virality")
             clip["virality_llm"] = v if isinstance(v, dict) and "hook" in v else None
         energy = energy_dynamics(*_read_audio(audio, clip["start"], clip["end"])) if audio.exists() else 0.0
-        clip["virality"] = compute(clip, clip_words(words, clip["start"], clip["end"]), energy)
+        cw = remap_words(clip_words(words, clip["start"], clip["end"]), clip.get("segments"))
+        clip["virality"] = compute(clip, cw, energy, clip.get("edited_duration"))
         log.info("  clip %d: viralidad %d (%s)", clip["n"], clip["virality"]["score"], clip["virality"]["grade"])
     job.save_json("highlights.json", data)
