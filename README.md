@@ -10,7 +10,7 @@ Cada etapa guarda su resultado en `data/<job_id>/`. Si algo falla, `resume` cont
 
 ## Instalación
 
-Necesitas Python 3.11+ y `ffmpeg` en el PATH. Una GPU NVIDIA es opcional (acelera Whisper).
+Necesitas Python 3.11+ y `ffmpeg` en el PATH. Una GPU NVIDIA es opcional (acelera mucho Whisper): instala también `pip install -e ".[gpu]"`, que trae las librerías CUDA (cuBLAS y cuDNN). Si faltan, la transcripción pasa sola a la CPU.
 
 ```bash
 python -m venv .venv
