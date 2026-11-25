@@ -1,0 +1,7 @@
+.env
+data/
+fonts/*.ttf
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/

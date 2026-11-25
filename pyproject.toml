@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clipforge"
+version = "0.1.0"
+description = "Convierte videos largos en clips verticales 9:16 con subtítulos."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "yt-dlp",
+    "faster-whisper>=1.0",
+    "anthropic>=0.70",
+    "mediapipe>=0.10.14",
+    "opencv-python-headless",
+    "numpy",
+    "typer>=0.12",
+    "pydantic>=2",
+    "pydantic-settings>=2",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+clipforge = "clipforge.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["clipforge*"]
+
+[tool.setuptools.package-data]
+clipforge = ["prompts/*.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

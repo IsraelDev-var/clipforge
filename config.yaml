@@ -1,0 +1,36 @@
+# Parámetros por defecto de ClipForge. Los flags de la CLI tienen prioridad.
+whisper_model: medium          # tiny | base | small | medium | large-v3
+whisper_device: auto           # auto | cpu | cuda
+whisper_compute_type: auto     # auto | int8 | float16 ...
+language: es
+initial_prompt: "Directo de programación en español. Python, JavaScript, TypeScript, React, Node, API, backend, frontend, Git, GitHub, Docker, base de datos, SQL."
+
+clips: 6
+min_seconds: 25
+max_seconds: 60
+
+llm_model: claude-sonnet-5-5
+chunk_minutes: 10
+chunk_overlap_minutes: 1
+
+output_resolution: [1080, 1920]
+loudnorm: false
+
+captions:
+  font: Montserrat ExtraBold
+  fonts_dir: fonts              # carpeta opcional con .ttf (relativa al proyecto)
+  size: 80
+  primary_color: "&H00FFFFFF"   # blanco (ASS: &HAABBGGRR)
+  highlight_color: "&H0000FFFF" # amarillo
+  outline_color: "&H00000000"
+  outline: 5
+  shadow: 2
+  words_per_chunk: 3
+  max_chars: 20
+  uppercase: true
+  margin_v: 620                 # distancia al borde inferior (tercio inferior-medio)
+
+reframe:
+  sample_fps: 5
+  smoothing: 0.15               # alfa de la media móvil exponencial (0-1, menor = más suave)
+  dead_zone: 0.06               # fracción del ancho de recorte que la cara puede moverse sin reencuadrar
