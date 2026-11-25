@@ -39,11 +39,31 @@ def _load_model(cfg: Config):
                              "La primera vez se descarga de huggingface.co: revisa tu conexión.") from exc
 
 
+def load_wav(path) -> "np.ndarray":
+    """Lee el audio.wav (PCM 16 bits, mono, 16 kHz) como float32 en [-1, 1].
+
+    Se decodifica aquí en vez de dejarlo a faster-whisper, que usa PyAV y falla con
+    algunas versiones (p. ej. «open() got an unexpected keyword argument 'metadata_errors'»).
+    """
+    import wave
+
+    import numpy as np
+
+    with wave.open(str(path), "rb") as w:
+        if w.getsampwidth() != 2 or w.getnchannels() != 1 or w.getframerate() != 16000:
+            raise ClipForgeError(f"audio.wav con formato inesperado ({w.getnchannels()} canales, "
+                                 f"{w.getframerate()} Hz, {8 * w.getsampwidth()} bits). "
+                                 "Regenéralo con `clipforge resume <job> --from audio`.")
+        data = w.readframes(w.getnframes())
+    return np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768.0
+
+
 def run_stage(job: Job, cfg: Config) -> None:
+    audio = load_wav(job.path("audio.wav"))
     model = _load_model(cfg)
     t0 = time.time()
     segments, info = model.transcribe(
-        str(job.path("audio.wav")),
+        audio,
         language=cfg.language,
         word_timestamps=True,
         vad_filter=True,
